@@ -22,12 +22,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from functools import lru_cache
 import pandas as pd
 from QUANTAXIS.QAARP.QAAccount import QA_Account
 from QUANTAXIS.QAUtil import (DATABASE, QA_util_log_info,
                               QA_util_random_with_topic)
 
 # pylint: disable=old-style-class, too-few-public-methods
+
+
 class QA_Portfolio():
 
     """
@@ -176,3 +179,87 @@ class QA_Portfolio():
                 QA_util_log_info(
                     '{} sync wrong \\\n wrong info {}'.format(account_cookie, e))
             self.accounts[account_cookie].from_message(message)
+
+
+class QA_TEST_MAKEPortfolio():
+
+    def __init__(self):
+        """
+        this is a dict for account_cookie----account instance
+        """
+        self.account_list = dict()
+
+    def make_portfolio(self, account_list):
+        pass
+
+
+class QA_PortfolioView():
+    """
+    对于Portfolio而言,一切都是基于内部的account的信息的变更而变更的
+
+    Portfolio不应该有过多可以修改的部分(作为一个view存在)
+    """
+
+    def __init__(self, account_list):
+        """
+                    ||portfolio||
+        ||acc1_cookie--acc1||acc2-cookie--acc2||...||
+
+
+        ||cash||assets||hold||history||trade_index||
+
+
+        ||Risk_analysis||Performace_analysis||
+        """
+        self.account_list = dict(
+            zip([account.account_cookie for account in account_list], account_list))
+        self.portfolio_cookie = QA_util_random_with_topic('Portfolio')
+        self.user_cookie = None
+        # self._broker = None
+        # self.user_cookie = None
+        # self._market_type = None
+        # self._strategy_name = None
+        # self._currenttime = None
+        # self._init_assets = None
+        # self._cash = None
+        # self._history = None
+        # self._trade_index = None
+
+    @property
+    def account_cookie(self):
+        return [account.account_cookie for account in self.accounts]
+
+    @property
+    def accounts(self):
+        """
+        return all accounts inside the portfolio view
+        """
+        return list(self.account_list.values())
+
+    @property
+    def start_date(self):
+        return str(pd.to_datetime(pd.Series([account.start_date for account in self.accounts])).min())[0:10]
+
+    @property
+    def end_date(self):
+        return str(pd.to_datetime(pd.Series([account.end_date for account in self.accounts])).max())[0:10]
+
+    @property
+    def code(self):
+        return pd.concat([pd.Series(account.code) for account in self.accounts]).drop_duplicates().tolist()
+
+    @property
+    def init_assets(self):
+        return sum([account.init_assets for account in self.accounts])
+
+    @property
+    def daily_cash(self):
+        res = pd.DataFrame(sum([account.daily_cash.set_index(
+            'datetime').cash for account in self.accounts]))
+        res = res.assign(date=res.index)
+        res.date = res.date.apply(lambda x: str(x)[0:10])
+        return res
+
+    @property
+    def daily_hold(self):
+        return pd.concat([account.daily_hold.set_index('date') for account in self.accounts]).groupby('date').sum()

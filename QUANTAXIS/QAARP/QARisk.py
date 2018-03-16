@@ -126,16 +126,22 @@ class QA_Risk():
 
     @property
     def benchmark_data(self):
+        """
+        基准组合的行情数据(一般是组合,可以调整)
+        """
         return self.fetch[self.benchmark_type](
             self.benchmark_code, self.account.start_date, self.account.end_date)
 
     @property
     def benchmark_assets(self):
+        """
+        基准组合的账户资产队列
+        """
         return (self.benchmark_data.open / float(self.benchmark_data.open.iloc[0]) * float(self.account.init_assets))
 
     @property
     def benchmark_annualize_return(self):
-        """年化收益
+        """基准组合的年化收益
 
         Returns:
             [type] -- [description]
@@ -145,19 +151,47 @@ class QA_Risk():
 
     @property
     def benchmark_profitpct(self):
+        """
+        benchmark 基准组合的收益百分比计算
+        """
         return self.calc_profitpctchange(self.benchmark_assets)
 
     @property
     def beta(self):
+        """
+        beta比率 组合的系统性风险
+        """
         return self.calc_beta(self.profit_pct.dropna(), self.benchmark_profitpct.dropna())
 
     @property
     def alpha(self):
+        """
+        alpha比率 与市场基准收益无关的超额收益率
+        """
         return self.calc_alpha(self.annualize_return, self.benchmark_annualize_return, self.beta, 0.05)
 
     @property
     def sharpe(self):
+        """
+        夏普比率
+
+        """
         return self.calc_sharpe(self.annualize_return, self.volatility, 0.05)
+
+    @property
+    def sortino(self):
+        """ 
+        索提诺比率 投资组合收益和下行风险比值
+
+        """
+        pass
+
+    @property
+    def calmar(self):
+        """
+        卡玛比率
+        """
+        pass
 
     def set_benchmark(self, code, market_type):
         self.benchmark_code = code
@@ -193,30 +227,60 @@ class QA_Risk():
 
     def save(self):
         """save to mongodb
-        
+
         """
         save_riskanalysis(self.message)
 
 
-class QA_Performace(QA_Risk):
+class QA_Performance():
+    """
+    QA_Performance是一个绩效分析插件
+
+    需要加载一个account/portfolio类进来:
+    需要有
+    code,start_date,end_date,daily_cash,daily_hold
+    """
+
     def __init__(self, account):
-        super().__init__(account)
+
+        self.account = account
+        self._style_title = ['beta', 'momentum', 'size', 'earning_yield',
+                             'volatility', 'growth', 'value', 'leverage', 'liquidity', 'reversal']
 
     @property
-    def benchmark_assets(self):
-        pass
-
-    def set_benchmark(self):
-        pass
-
-    @property
-    def alpha(self):
+    def prefer(self):
         pass
 
     @property
-    def beta(self):
+    def style(self):
+        """风格分析
+        """
+        pass
+
+    def abnormal_active(self):
+        """
+        账户的成交发生异常成交记录的分析
+        """
+        pass
+
+    def brinson(self):
+        """Brinson Model analysis
+        """
+        pass
+
+    def hold(self):
+        """持仓分析
+        """
         pass
 
     @property
-    def sharpe(self):
+    def accumulate_return(self):
+        """
+        returns a pd-Dataframe format accumulate return for different periods
+        """
+        pass
+
+    def save(self):
+        """save the performance analysis result to database
+        """
         pass

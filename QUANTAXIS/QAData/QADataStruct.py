@@ -98,11 +98,6 @@ class _quotation_base():
 
     __radd__ = __add__
 
-    # def __iadd__(self, DataStruct):
-    #     assert isinstance(DataStruct, _quotation_base)
-    #     assert self.is_same(DataStruct)
-    #     return self.append(DataStruct)
-
     def __sub__(self, DataStruct):
         assert isinstance(DataStruct, _quotation_base)
         assert self.is_same(DataStruct)
@@ -110,8 +105,16 @@ class _quotation_base():
 
     __rsub__ = __sub__
 
-    # def __isub__(self, DataStruct):
-    #     return self.drop(DataStruct)
+    def __getitem__(self, key):
+        return self.new(data=self.data.__getitem__(key), dtype=self.type, if_fq=self.if_fq)
+
+    def __getattr__(self, attr):
+        raise AttributeError(
+            'QA CLASS Currently has no attribute {}'.format(attr))
+
+    def ix(self, key):
+        return self.new(data=self.data.ix(key), dtype=self.type, if_fq=self.if_fq)
+
     @property
     @lru_cache()
     def open(self):
@@ -138,17 +141,6 @@ class _quotation_base():
 
     @property
     @lru_cache()
-    def vol(self):
-        'return vol/volume'
-        if 'volume' in self.data.columns:
-            return self.data.volume
-        elif 'vol' in self.data.columns:
-            return self.data.vol
-        else:
-            return None
-
-    @property
-    @lru_cache()
     def volume(self):
         if 'volume' in self.data.columns:
             return self.data.volume
@@ -158,6 +150,8 @@ class _quotation_base():
             return self.data.trade
         else:
             return None
+
+    vol = volume
 
     @property
     @lru_cache()
@@ -347,20 +341,6 @@ class _quotation_base():
         '返回一个基于代码的迭代器'
         for item in self.index.levels[1]:
             yield self.data.xs(item, level=1)
-
-    # def append(self, DataStruct):
-    #     assert isinstance(DataStruct, _quotation_base)
-    #     assert self.is_same(DataStruct)
-    #     self.data = self.data.append(DataStruct.data).drop_duplicates(
-    #     ).set_index(self.index.names, drop=False)
-    #     return self
-
-    # def drop(self, DataStruct):
-    #     assert isinstance(DataStruct, _quotation_base)
-    #     assert self.is_same(DataStruct)
-    #     self.data = self.data.drop(DataStruct.index).set_index(
-    #         self.index.names, drop=False)
-    #     return self
 
     @property
     @lru_cache()
@@ -618,6 +598,10 @@ class _quotation_base():
 
 
 class QA_DataStruct_Stock_day(_quotation_base):
+    """
+    this is a datastruct for stock_day
+    """
+
     def __init__(self, DataFrame, dtype='stock_day', if_fq='bfq'):
         super().__init__(DataFrame, dtype, if_fq)
         if 'high_limit' not in self.data.columns:
@@ -752,6 +736,10 @@ class QA_DataStruct_Future_day(_quotation_base):
 
 
 class QA_DataStruct_Future_min(_quotation_base):
+    """
+    struct for future
+    """
+
     def __init__(self, DataFrame, dtype='future_min', if_fq=''):
         self.type = 'future_day'
         self.data = DataFrame.ix[:, [
@@ -1058,6 +1046,44 @@ class QA_DataStruct_Stock_transaction():
         """
 
         return self.data.amount
+    """
+    最新:IF(ISNULL(NEW),PRE,NEW);
+    IF (ISNULL(RANGE_AVG_PRICE) OR RANGE_AVG_PRICE <= 0)
+    {
+        IF (MARKETTYPE == 232 OR MARKETTYPE == 56 OR MARKETTYPE==64 OR MARKETTYPE==128 OR MARKETTYPE==168 OR MARKETTYPE==184 OR MARKETTYPE == 200 OR MARKETTYPE == 80 OR (VOL > 1 AND VOL<100))
+        {
+            b=SUBSAMEDAY(&VOL) ;
+            m=SUM(b*最新,0);
+            均价:IF(m>0,m/VOL,PRE);
+        }
+        ELSE IF(CODETYPE!=0 AND MONEY>0)
+        {
+            IF(ISNULL(MONEY) OR ISNULL(VOL) OR VOL==0 OR MONEY==0)
+                均价:PRE;
+            ELSE IF(VOL==VOL[1] OR MONEY==MONEY[1])
+                均价:均价[1];
+            ELSE
+                均价:MONEY/VOL;
+        }
+        ELSE IF (MARKETTYPE == 176)
+        {
+            b=SUBSAMEDAY(&MONEY);
+            m=SUM(b*最新,0);
+            IF(m>0)
+                均价:m/MONEY;
+        }
+    }
+    ELSE
+    {
+        均价:RANGE_AVG_PRICE;
+    }
+    DRAWGBK(MARKETTYPE==32 AND FORMATTIME(1)<10 AND TRADETIME>242),RGB(0,0,128);
+    RETURN;
+
+
+    hx_star;
+    hx_star_p;
+    """
 
     def __repr__(self):
         return '< QA_DataStruct_Stock_Transaction >'
@@ -1133,91 +1159,193 @@ class _realtime_base():
     """
 
     def __init__(self, market_data):
-        if isinstance(market_data, dict):
-            self.market_data = QA_util_to_pandas_from_json(market_data)
+        """转化成dict模式
 
-        elif isinstance(market_data, pd.DataFrame):
+        Arguments:
+            market_data {[type]} -- [description]
+        """
+
+        if isinstance(market_data, dict):
             self.market_data = market_data
+        elif isinstance(market_data, pd.DataFrame):
+            self.market_data = QA_util_to_json_from_pandas(market_data)
 
     @property
     def open(self):
-        try:
-            return self.market_data.open
-        except:
-            return None
+        return self.market_data.get('open', None)
 
     @property
     def price(self):
-        try:
-            return self.market_data.price
-        except:
-            return None
+        return self.market_data.get('price', None)
+
+    @property
+    def datetime(self):
+        return self.market_data.get('datetime', None)
 
     @property
     def high(self):
-        try:
-            return self.market_data.high
-        except:
-            return None
+        return self.market_data.get('high', None)
+
     @property
     def low(self):
-        try:
-            return self.market_data.low
-        except:
-            return None
+        return self.market_data.get('low', None)
 
     @property
     def code(self):
-        try:
-            return self.market_data.code
-        except:
-            return None
+        return self.market_data.get('code', None)
+
     @property
     def last_close(self):
-        try:
-            return self.market_data.last_close
-        except:
-            return None
+        return self.market_data.get('last_close', None)
+
+    @property
+    def cur_vol(self):
+        return self.market_data.get('cur_vol', None)
+
+    @property
+    def bid1(self):
+        return self.market_data.get('bid1', None)
+
+    @property
+    def bid_vol1(self):
+        return self.market_data.get('bid_vol1', None)
+
+    @property
+    def bid2(self):
+        return self.market_data.get('bid2', None)
+
+    @property
+    def bid_vol2(self):
+        return self.market_data.get('bid_vol2', None)
+
+    @property
+    def bid3(self):
+        return self.market_data.get('bid3', None)
+
+    @property
+    def bid_vol3(self):
+        return self.market_data.get('bid_vol3', None)
+
+    @property
+    def bid4(self):
+        return self.market_data.get('bid4', None)
+
+    @property
+    def bid_vol4(self):
+        return self.market_data.get('bid_vol4', None)
+
+    @property
+    def bid5(self):
+        return self.market_data.get('bid5', None)
+
+    @property
+    def bid_vol5(self):
+        return self.market_data.get('bid_vol5', None)
+
+    @property
+    def ask1(self):
+        return self.market_data.get('ask1', None)
+
+    @property
+    def ask_vol1(self):
+        return self.market_data.get('ask_vol1', None)
+
+    @property
+    def ask2(self):
+        return self.market_data.get('ask2', None)
+
+    @property
+    def ask_vol2(self):
+        return self.market_data.get('ask_vol2', None)
+
+    @property
+    def ask3(self):
+        return self.market_data.get('ask3', None)
+
+    @property
+    def ask_vol3(self):
+        return self.market_data.get('ask_vol3', None)
+
+    @property
+    def ask4(self):
+        return self.market_data.get('ask4', None)
+
+    @property
+    def ask_vol4(self):
+        return self.market_data.get('ask_vol4', None)
+
+    @property
+    def ask5(self):
+        return self.market_data.get('ask5', None)
+
+    @property
+    def ask_vol5(self):
+        return self.market_data.get('ask_vol5', None)
 
 
 class QA_DataStruct_Stock_realtime(_realtime_base):
     def __init__(self, market_data):
         if isinstance(market_data, dict):
-            self.market_data = QA_util_to_pandas_from_json(market_data)
-
-        elif isinstance(market_data, pd.DataFrame):
             self.market_data = market_data
+        elif isinstance(market_data, pd.DataFrame):
+            self.market_data = QA_util_to_json_from_pandas(market_data)
+
+    def __repr__(self):
+        return '< QA_REALTIME_STRUCT {}{} >'.format(self.code, self.datetime)
+
+    # @property
+    # def ask_list(self):
+    #     return self.market_data.ix[:, ['ask1', 'ask_vol1', 'bid1', 'bid_vol1', 'ask2', 'ask_vol2',
+    #                                    'bid2', 'bid_vol2', 'ask3', 'ask_vol3', 'bid3', 'bid_vol3', 'ask4',
+    #                                    'ask_vol4', 'bid4', 'bid_vol4', 'ask5', 'ask_vol5', 'bid5', 'bid_vol5']]
+
+    # @property
+    # def bid_list(self):
+    #     return self.market_data.ix[:, ['bid1', 'bid_vol1', 'bid2', 'bid_vol2',  'bid3', 'bid_vol3', 'bid4', 'bid_vol4', 'bid5', 'bid_vol5']]
 
     @property
-    def cur_vol(self):
-        return self.market_data.cur_vol
+    def _data(self):
+        """
+        return a dataframe-type result
+        """
+        return pd.DataFrame(self.market_data)
 
     @property
-    def s_vol(self):
-        return self.market_data.s_vol
+    def ab_board(self):
+        """ask_bid board
+        bid3 bid_vol3
+        bid2 bid_vol2
+        bid1 bid_vol1
+        ===============
+        price /cur_vol
+        ===============
+        ask1 ask_vol1
+        ask2 ask_vol2
+        ask3 ask_vol3
+        """
+        return 'BID5 {}  {} \nBID4 {}  {} \nBID3 {}  {} \nBID2 {}  {} \nBID1 {}  {} \n============\nCURRENT {}  {} \n============\
+        \nASK1 {}  {} \nASK2 {}  {} \nASK3 {}  {} \nASK4 {}  {} \nASK5 {}  {} \nTIME {}  CODE {} '.format(
+            self.bid5, self.bid_vol5, self.bid4, self.bid_vol4, self.bid3, self.bid_vol3, self.bid2, self.bid_vol2, self.bid1, self.bid_vol1,
+            self.price, self.cur_vol,
+            self.ask1, self.ask_vol1, self.ask2, self.ask_vol2, self.ask3, self.ask_vol3, self.ask4, self.ask_vol4, self.ask5, self.ask_vol5,
+            self.datetime, self.code
+        )
 
-    @property
-    def b_vol(self):
-        return self.market_data.b_vol
+    def serialize(self):
+        """to_protobuf
+        """
+        pass
 
-    @property
-    def vol(self):
-        return self.market_data.vol
 
-    @property
-    def ask_list(self):
-        return self.market_data.ix[:, ['ask1', 'ask_vol1', 'bid1', 'bid_vol1', 'ask2', 'ask_vol2',
-                                       'bid2', 'bid_vol2', 'ask3', 'ask_vol3', 'bid3', 'bid_vol3', 'ask4',
-                                       'ask_vol4', 'bid4', 'bid_vol4', 'ask5', 'ask_vol5', 'bid5', 'bid_vol5']]
+class QA_DataStruct_Stock_realtime_series():
+    def __init__(self, sr_series):
 
-    @property
-    def bid_list(self):
-        return self.market_data.ix[:, ['bid1', 'bid_vol1', 'bid2', 'bid_vol2',  'bid3', 'bid_vol3', 'bid4', 'bid_vol4', 'bid5', 'bid_vol5']]
-
-    # [['datetime', 'active1', 'active2', 'last_close', 'code', 'open', 'high', 'low', 'price', 'cur_vol',
-    #   's_vol', 'b_vol', 'vol', 'ask1', 'ask_vol1', 'bid1', 'bid_vol1', 'ask2', 'ask_vol2',
-    #                     'bid2', 'bid_vol2', 'ask3', 'ask_vol3', 'bid3', 'bid_vol3', 'ask4',
-    #                     'ask_vol4', 'bid4', 'bid_vol4', 'ask5', 'ask_vol5', 'bid5', 'bid_vol5']]
+        if isinstance(sr_series[0], QA_DataStruct_Stock_realtime):
+            self.sr_series = sr_series
+        elif isinstance(sr_series[0], dict):
+            self.sr_series = [
+                QA_DataStruct_Stock_realtime(sr) for sr in sr_series]
+        self.table = pd.concat([sr._data for sr in self.sr_series])
 
 
 class QA_DataStruct_Security_list():
